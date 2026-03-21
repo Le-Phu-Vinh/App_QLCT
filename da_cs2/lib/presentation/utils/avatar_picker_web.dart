@@ -28,8 +28,5 @@ Future<Uint8List?> pickAndCropAvatar(BuildContext context) async {
   if (pickedFile == null) return null;
 
   final bytes = await pickedFile.readAsBytes();
-
-  // Web: không có cropper native, chỉ trả về ảnh đã chọn.
-  // Người dùng có thể tùy chỉnh avatar bằng cách crop/scale bên UI (ví dụ CircleAvatar fit) hoặc mở rộng sau.
   return bytes;
 }

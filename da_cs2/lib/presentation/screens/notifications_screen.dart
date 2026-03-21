@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../logic/services/auth_service.dart';
 
-/// Màn hình hiển thị thông báo từ hệ thống và giao dịch mới.
-/// Yêu cầu bảng `notifications` trong Supabase (xem SQL trong comment).
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -12,24 +11,38 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final _authService = AuthService();
   final _supabase = Supabase.instance.client;
   final _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
+  /// Đánh dấu tất cả thông báo là đã đọc
   Future<void> _markAllAsRead() async {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = _authService.getCurrentUser()?.id;
     if (userId == null) return;
+
     try {
       await _supabase
           .from('notifications')
           .update({'is_read': true})
           .eq('user_id', userId)
           .eq('is_read', false);
-    } catch (_) {}
+    } catch (e) {
+      print('Error marking as read: $e');
+    }
+  }
+
+  /// Xoá thông báo
+  Future<void> _deleteNotification(String notifId) async {
+    try {
+      await _supabase.from('notifications').delete().eq('id', notifId);
+    } catch (e) {
+      print('Error deleting notification: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = _authService.getCurrentUser()?.id;
 
     return Scaffold(
       appBar: AppBar(
@@ -59,7 +72,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.error_outline, size: 48, color: Colors.grey[600]),
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.grey[600],
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             'Chưa thiết lập bảng thông báo.\nVui lòng chạy SQL trong Supabase Dashboard.',
@@ -78,7 +95,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.notifications_none, size: 64, color: Colors.grey),
+                        Icon(
+                          Icons.notifications_none,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 16),
                         Text('Chưa có thông báo nào'),
                       ],
@@ -86,17 +107,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   );
                 }
 
+                final hasUnread = items.any(
+                  (e) => (e['is_read'] ?? true) == false,
+                );
+
                 return Column(
                   children: [
-                    if (items.any((e) => (e['is_read'] ?? true) == false))
+                    if (hasUnread)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
-                            onPressed: () async {
-                              await _markAllAsRead();
-                            },
+                            onPressed: _markAllAsRead,
                             icon: const Icon(Icons.done_all, size: 18),
                             label: const Text('Đánh dấu đã đọc tất cả'),
                           ),
@@ -106,12 +132,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       child: ListView.builder(
                         itemCount: items.length,
                         itemBuilder: (context, i) {
-                          final n = items[i];
-                          final type = (n['type'] ?? 'system').toString();
-                          final title = (n['title'] ?? '').toString();
-                          final body = (n['body'] ?? '').toString();
-                          final createdAt = n['created_at'];
-                          final isRead = n['is_read'] == true;
+                          final notif = items[i];
+                          final type = (notif['type'] ?? 'system').toString();
+                          final title = (notif['title'] ?? '').toString();
+                          final body = (notif['body'] ?? '').toString();
+                          final createdAt = notif['created_at'];
+                          final isRead = notif['is_read'] == true;
 
                           final icon = type == 'transaction'
                               ? Icons.receipt_long
@@ -121,22 +147,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               : Colors.orange;
 
                           return Dismissible(
-                            key: ValueKey(n['id']),
+                            key: ValueKey(notif['id']),
                             direction: DismissDirection.endToStart,
                             background: Container(
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: 20),
                               color: Colors.red,
-                              child: const Icon(Icons.delete, color: Colors.white),
+                              child: const Icon(
+                                Icons.delete,
+                                color: Colors.white,
+                              ),
                             ),
-                            onDismissed: (_) async {
-                              try {
-                                await _supabase
-                                    .from('notifications')
-                                    .delete()
-                                    .eq('id', n['id']);
-                              } catch (_) {}
-                            },
+                            onDismissed: (_) =>
+                                _deleteNotification(notif['id']),
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: iconColor.withOpacity(0.2),
@@ -145,35 +168,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               title: Text(
                                 title,
                                 style: TextStyle(
-                                  fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                  fontWeight: isRead
+                                      ? FontWeight.normal
+                                      : FontWeight.bold,
                                 ),
                               ),
-                              subtitle: body.isNotEmpty
-                                  ? Text(
-                                      body,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  : null,
-                              trailing: createdAt != null
-                                  ? Text(
-                                      _dateFmt.format(DateTime.parse(createdAt.toString())),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                              subtitle: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(body, maxLines: 2),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _dateFmt.format(DateTime.parse(createdAt)),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              trailing: !isRead
+                                  ? Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.blue,
+                                        shape: BoxShape.circle,
                                       ),
                                     )
                                   : null,
-                              onTap: () async {
-                                if (!isRead) {
-                                  try {
-                                    await _supabase
-                                        .from('notifications')
-                                        .update({'is_read': true})
-                                        .eq('id', n['id']);
-                                  } catch (_) {}
-                                }
-                              },
                             ),
                           );
                         },
@@ -186,29 +211,3 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 }
-
-/*
-  SQL tạo bảng notifications trong Supabase (SQL Editor):
-  ----------------------------------------
-  create table if not exists notifications (
-    id uuid primary key default gen_random_uuid(),
-    user_id uuid references auth.users(id) on delete cascade not null,
-    type text not null check (type in ('transaction', 'system')),
-    title text not null,
-    body text,
-    ref_id text,
-    created_at timestamptz default now(),
-    is_read boolean default false
-  );
-
-  alter table notifications enable row level security;
-
-  create policy "Users manage own notifications"
-    on notifications for all
-    using (auth.uid() = user_id)
-    with check (auth.uid() = user_id);
-
-  create index if not exists idx_notifications_user_read
-    on notifications(user_id, is_read) where is_read = false;
-  ----------------------------------------
-*/
