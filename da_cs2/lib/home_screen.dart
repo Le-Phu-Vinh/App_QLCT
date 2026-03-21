@@ -8,9 +8,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'profile_screen.dart';
 import 'notifications_screen.dart';
+import 'avatar_picker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onToggleTheme});
@@ -31,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   _PendingTxn? _pendingTxn;
   _LifecycleObserver? _lifecycleObserver;
   StreamSubscription<dynamic>? _bankNotifSub;
+  Uint8List? _avatarBytes;
 
   static const _bankNotifChannel = EventChannel('bank_notifications');
 
@@ -51,6 +54,32 @@ class _HomeScreenState extends State<HomeScreen> {
   String _formatMoney(dynamic v) {
     final n = _asNum(v);
     return '${_moneyFmt.format(n)}đ';
+  }
+
+  Future<void> _loadAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    final avatarString = prefs.getString('user_avatar');
+    if (avatarString != null) {
+      setState(() {
+        _avatarBytes = base64Decode(avatarString);
+      });
+    }
+  }
+
+  Future<void> _saveAvatar(Uint8List bytes) async {
+    final prefs = await SharedPreferences.getInstance();
+    final avatarString = base64Encode(bytes);
+    await prefs.setString('user_avatar', avatarString);
+    setState(() {
+      _avatarBytes = bytes;
+    });
+  }
+
+  Future<void> _pickAvatar() async {
+    final bytes = await pickAndCropAvatar(context);
+    if (bytes != null) {
+      await _saveAvatar(bytes);
+    }
   }
 
   // Hàm đăng xuất
@@ -99,26 +128,28 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadAvatar();
     _lifecycleObserver = _LifecycleObserver(onResumed: _onAppResumed);
     WidgetsBinding.instance.addObserver(_lifecycleObserver!);
 
     // Notification listener chỉ hoạt động trên Android app (không áp dụng Web)
     if (_isAndroidApp) {
-      _bankNotifSub = _bankNotifChannel.receiveBroadcastStream().listen(
-        (event) {
-          if (event is Map) {
-            final pkg = (event['package'] ?? '').toString();
-            final title = (event['title'] ?? '').toString();
-            final text = (event['text'] ?? '').toString();
-            final bigText = (event['bigText'] ?? '').toString();
-            final merged = [title, bigText, text]
-                .where((e) => e.trim().isNotEmpty)
-                .join('\n');
-            _handleBankNotification(pkg: pkg, body: merged);
-          }
-        },
-        onError: (_) {},
-      );
+      _bankNotifSub = _bankNotifChannel.receiveBroadcastStream().listen((
+        event,
+      ) {
+        if (event is Map) {
+          final pkg = (event['package'] ?? '').toString();
+          final title = (event['title'] ?? '').toString();
+          final text = (event['text'] ?? '').toString();
+          final bigText = (event['bigText'] ?? '').toString();
+          final merged = [
+            title,
+            bigText,
+            text,
+          ].where((e) => e.trim().isNotEmpty).join('\n');
+          _handleBankNotification(pkg: pkg, body: merged);
+        }
+      }, onError: (_) {});
     }
   }
 
@@ -151,10 +182,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_launchedBank) return;
 
     final amount = _tryParseAmountFromText(body);
-    final titleHint = body.trim().isEmpty ? 'Giao dịch ngân hàng' : body.split('\n').first.trim();
+    final titleHint = body.trim().isEmpty
+        ? 'Giao dịch ngân hàng'
+        : body.split('\n').first.trim();
 
     // store for resume flow too
-    _pendingTxn = _PendingTxn(rawPayload: body, amount: amount, titleHint: titleHint);
+    _pendingTxn = _PendingTxn(
+      rawPayload: body,
+      amount: amount,
+      titleHint: titleHint,
+    );
 
     // If we are already in foreground, ask immediately.
     await _promptAddFromBankNotification(_pendingTxn!);
@@ -164,7 +201,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     bool isExpense = true;
-    final shouldAdd = await showDialog<bool>(
+    final shouldAdd =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) {
             return StatefulBuilder(
@@ -380,7 +418,11 @@ class _HomeScreenState extends State<HomeScreen> {
       if (note.isNotEmpty) titleHint = note;
     }
 
-    return _PendingTxn(rawPayload: scanned!, amount: amount, titleHint: titleHint);
+    return _PendingTxn(
+      rawPayload: scanned!,
+      amount: amount,
+      titleHint: titleHint,
+    );
   }
 
   Future<void> _openLinkedBankApp(_PendingTxn pending) async {
@@ -432,7 +474,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('Gợi ý tên: ${pending.titleHint}'),
               const SizedBox(height: 6),
               Text(
-                pending.amount > 0 ? 'Số tiền: ${_formatMoney(pending.amount)}' : 'Số tiền: (không có)',
+                pending.amount > 0
+                    ? 'Số tiền: ${_formatMoney(pending.amount)}'
+                    : 'Số tiền: (không có)',
               ),
               const SizedBox(height: 12),
               Row(
@@ -582,8 +626,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       contentPadding: EdgeInsets.zero,
                       value: true,
                       groupValue: isExpense,
-                      onChanged: (v) =>
-                          setState(() => isExpense = v ?? true),
+                      onChanged: (v) => setState(() => isExpense = v ?? true),
                       title: const Text('Chi ra'),
                     ),
                   ),
@@ -592,8 +635,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       contentPadding: EdgeInsets.zero,
                       value: false,
                       groupValue: isExpense,
-                      onChanged: (v) =>
-                          setState(() => isExpense = v ?? true),
+                      onChanged: (v) => setState(() => isExpense = v ?? true),
                       title: const Text('Thu vào'),
                     ),
                   ),
@@ -605,8 +647,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     final title = titleController.text.trim();
-                    final rawAmount =
-                        _normalizeMoneyInput(amountController.text);
+                    final rawAmount = _normalizeMoneyInput(
+                      amountController.text,
+                    );
                     final amount = num.tryParse(rawAmount) ?? 0;
 
                     if (title.isEmpty || amount <= 0) {
@@ -821,7 +864,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
-        leading: const Icon(Icons.account_circle, size: 30),
+        leading: IconButton(
+          onPressed: _pickAvatar,
+          icon: _avatarBytes != null
+              ? CircleAvatar(
+                  backgroundImage: MemoryImage(_avatarBytes!),
+                  radius: 15,
+                )
+              : const Icon(Icons.account_circle, size: 30),
+        ),
         actions: [
           _buildNotificationButton(user?.id),
           IconButton(
@@ -950,9 +1001,7 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _navIndex = idx);
           if (!context.mounted) return;
           await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const ProfileScreen(),
-            ),
+            MaterialPageRoute(builder: (context) => const ProfileScreen()),
           );
           return;
         }
