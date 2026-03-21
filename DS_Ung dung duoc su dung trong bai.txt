@@ -1,0 +1,9 @@
+- Framework: Flutter
+- Language: Dart
+- Database: Fire Strore
+- UX/UI: Figma
+- Sơ đồ thực thể (ERD): dbdiagram.io
+- Sơ đồ luồng dữ liệu: Draw.io
+- Sơ đồ Use Case: Draw.io
+- Sơ đồ hoạt động: Draw.io
+- Kiến trúc sử dụng: Provider.
