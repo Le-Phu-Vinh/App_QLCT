@@ -14,6 +14,7 @@ import '../../presentation/widgets/main_balance_card.dart';
 import '../../presentation/widgets/summary_card.dart';
 import '../../presentation/widgets/transactions_list.dart';
 import '../../presentation/widgets/home_bottom_nav.dart';
+import 'all_transactions_screen.dart';
 import '../../presentation/widgets/transaction_dialog_sheets.dart';
 import '../../presentation/widgets/bank_dialog_sheets.dart';
 import '../utils/avatar_picker.dart';
@@ -190,66 +191,86 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(onPressed: _handleSignOut, icon: const Icon(Icons.logout)),
         ],
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _profileProvider.getProfileStream(user?.id),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: SafeArea(
+        child: StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _profileProvider.getProfileStream(user?.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text("Không tìm thấy dữ liệu người dùng"),
-            );
-          }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(
+                child: Text("Không tìm thấy dữ liệu người dùng"),
+              );
+            }
 
-          final userData = snapshot.data![0];
-          final username = userData['username'] ?? "Người dùng";
-          final balance = MoneyFormatter.asNum(userData['balance']);
-          final expense = MoneyFormatter.asNum(userData['expense']);
-          final income = MoneyFormatter.asNum(userData['income']);
+            final userData = snapshot.data![0];
+            final username = userData['username'] ?? "Người dùng";
+            final balance = MoneyFormatter.asNum(userData['balance']);
+            final expense = MoneyFormatter.asNum(userData['expense']);
+            final income = MoneyFormatter.asNum(userData['income']);
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Chào $username",
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Chào $username",
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                MainBalanceCard(balance: balance, userId: user?.id),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    SummaryCard(
-                      title: "Chi tiêu",
-                      amount: MoneyFormatter.formatMoney(expense),
-                      color: Colors.red,
-                    ),
-                    const SizedBox(width: 15),
-                    SummaryCard(
-                      title: "Thu nhập",
-                      amount: MoneyFormatter.formatMoney(income),
-                      color: Colors.green,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  "Lịch sử giao dịch gần đây",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                TransactionsList(userId: user?.id),
-              ],
-            ),
-          );
-        },
+                  const SizedBox(height: 20),
+                  MainBalanceCard(balance: balance, userId: user?.id),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      SummaryCard(
+                        title: "Chi tiêu",
+                        amount: MoneyFormatter.formatMoney(expense),
+                        color: Colors.red,
+                      ),
+                      const SizedBox(width: 15),
+                      SummaryCard(
+                        title: "Thu nhập",
+                        amount: MoneyFormatter.formatMoney(income),
+                        color: Colors.green,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Lịch sử giao dịch gần đây",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AllTransactionsScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text('Xem tất cả'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TransactionsList(userId: user?.id, limit: 5),
+                ],
+              ),
+            );
+          },
+        ),
       ),
       bottomNavigationBar: HomeBottomNav(
         currentIndex: _navIndex,
