@@ -23,4 +23,5 @@ class AppConstants {
   static const String transactionsTable = 'transactions';
   static const String profilesTable = 'profiles';
   static const String notificationsTable = 'notifications';
+  static const String budgetGoalsTable = 'budget_goals';
 }
