@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'logic/services/budget_alert_service.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/home_screen.dart';
 
@@ -16,6 +17,9 @@ void main() async {
       authFlowType: AuthFlowType.pkce,
     ),
   );
+
+  // Khởi tạo Budget Alert Service
+  await BudgetAlertService().initialize();
 
   runApp(const MyApp());
 }

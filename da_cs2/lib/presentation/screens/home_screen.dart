@@ -7,6 +7,7 @@ import '../../logic/services/auth_service.dart';
 import '../../logic/services/bank_notification_service.dart';
 import '../../logic/services/notification_listener_service.dart';
 import '../../logic/services/qr_scanner_service.dart';
+import '../../logic/services/budget_alert_service.dart';
 import '../../models/lifecycle_observer.dart';
 import '../../models/pending_transaction.dart';
 import '../../presentation/widgets/notification_button.dart';
@@ -18,6 +19,7 @@ import 'all_transactions_screen.dart';
 import '../../presentation/widgets/transaction_dialog_sheets.dart';
 import '../../presentation/widgets/bank_dialog_sheets.dart';
 import '../utils/avatar_picker.dart';
+import 'budget_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onToggleTheme});
@@ -38,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _qrService = QrScannerService();
   final _transactionDialogs = TransactionDialogSheets();
   final _bankDialogs = BankDialogSheets();
+  final _budgetAlertService = BudgetAlertService();
 
   // State
   int _navIndex = 0;
@@ -73,6 +76,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isAndroidApp) {
       _notifListener.startListening(_handleBankNotification);
     }
+
+    // Thiết lập kiểm tra budget alerts hàng ngày
+    _setupBudgetAlertTimer();
+  }
+
+  /// Thiết lập timer kiểm tra budget alerts hàng ngày
+  void _setupBudgetAlertTimer() {
+    // Kiểm tra ngay lập tức
+    final userId = _authService.getCurrentUser()?.id;
+    if (userId != null) {
+      _budgetAlertService.checkAndSendAlerts(userId);
+    }
+
+    // Thiết lập timer hàng ngày (24 giờ)
+    // Trong production, nên dùng work manager hoặc background task
+    Future.delayed(const Duration(hours: 24), () {
+      if (mounted) {
+        _setupBudgetAlertTimer();
+      }
+    });
   }
 
   @override
@@ -240,6 +263,67 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Colors.green,
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const BudgetSettingsScreen(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet,
+                            color: Theme.of(context).primaryColor,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 16),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Cài đặt ngân sách',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Đặt mục tiêu chi tiêu theo tháng',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.grey,
+                            size: 16,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   Row(
